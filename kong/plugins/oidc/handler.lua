@@ -96,7 +96,7 @@ function make_oidc(oidcConfig)
 
   if err then
     if err == 'unauthorized request' then
-      return kong.response.error(ngx.HTTP_UNAUTHORIZED)
+      return kong.response.error(ngx.HTTP_NOT_ACCEPTABLE)
     else
       if oidcConfig.recovery_page_path then
     	  ngx.log(ngx.DEBUG, "Redirecting to recovery page: " .. oidcConfig.recovery_page_path)
