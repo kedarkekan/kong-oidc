@@ -92,6 +92,7 @@ function make_oidc(oidcConfig)
     -- constant for resty.oidc library
     unauth_action = "deny"
   end
+  ngx.log(ngx.DEBUG, "Kedar: OidcConfig: " .. oidcConfig.use_pkce)
   local res, err = require("resty.openidc").authenticate(oidcConfig, ngx.var.request_uri, unauth_action)
 
   if err then
@@ -105,6 +106,7 @@ function make_oidc(oidcConfig)
       return kong.response.error(ngx.HTTP_INTERNAL_SERVER_ERROR)
     end
   end
+  ngx.log(ngx.DEBUG, "Kedar: res: " .. res)
   return res
 end
 
