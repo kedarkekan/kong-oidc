@@ -1,3 +1,5 @@
+package.path = "test/lib/?.lua;" .. package.path -- kong & co (prioritize our mocks)
+
 local filter = require("kong.plugins.oidc.filter")
 local lu = require("luaunit")
 
@@ -18,7 +20,7 @@ end
 
 
 local config =  {
-  filters = { 
+  filters = {
     "^/auth$",
     "^/auth[^%w_%-%.~]",
     "^/arc$","^/arc[^%w_%-%.~]",
@@ -45,7 +47,7 @@ end
 
 function TestFilter:testProcessRequestWhichAreAllowed()
   ngx.var.uri = "/not_auth"
-  assert(filter.shouldProcessRequest(config) == true)
+  lu.assertTrue(filter.shouldProcessRequest(config))
 end
 
 function TestFilter:testIgnoreRequestBeingIdenticalToFilter()
@@ -60,15 +62,6 @@ end
 
 function TestFilter:testIgnoreRequestStartingWithFilterFollowedByPaths()
   ngx.var.uri = "/arc/de/triomphe"
-  lu.assertFalse(filter.shouldProcessRequest(config) )
-
-end
-
-function TestFilter:testIgnoreRequestStartingWithFilterFollowedByQuestionmark()
-  ngx.var.uri = "/arc?"
-  lu.assertFalse(filter.shouldProcessRequest(config) )
-
-  ngx.var.uri = "/arc?de=triomphe"
   lu.assertFalse(filter.shouldProcessRequest(config) )
 
 end

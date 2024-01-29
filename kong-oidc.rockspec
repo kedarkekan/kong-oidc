@@ -1,8 +1,8 @@
 package = "kong-oidc"
-version = "1.4.0-1"
+version = "1.5.0-0"
 source = {
-    url = "git://github.com/revomatico/kong-oidc",
-    tag = "master",
+    url = "git://github.com/kedarkekan/kong-oidc",
+    tag = "v1.5.0-0",
     dir = "kong-oidc"
 }
 description = {
@@ -17,12 +17,18 @@ description = {
         It supports server-wide caching of resolved Discovery documents and validated Access Tokens.
 
         It can be used as a reverse proxy terminating OAuth/OpenID Connect in front of an origin server so that the origin server/services can be protected with the relevant standards without implementing those on the server itself.
+
+        Compatible with Kong 3.9.x and later versions.
     ]],
-    homepage = "https://github.com/nokia/kong-oidc",
+    homepage = "https://github.com/kedarkekan/kong-oidc",
     license = "Apache 2.0"
 }
 dependencies = {
-    "lua-resty-openidc ~> 1.7.6-3"
+    "lua-resty-openidc ~> 1.7.6-3",
+    "lua-resty-session ~> 4.0.5",
+    "lua-cjson",
+    "lua-resty-jwt",
+    "lua-resty-string"
 }
 build = {
     type = "builtin",

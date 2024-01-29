@@ -5,7 +5,7 @@ local M = {}
 
 local function parseFilters(csvFilters)
   local filters = {}
-  if (not (csvFilters == nil)) and (not (csvFilters == ",")) then
+  if (csvFilters ~= nil) and (csvFilters ~= ",") then
     for pattern in string.gmatch(csvFilters, "[^,]+") do
       table.insert(filters, pattern)
     end
@@ -87,7 +87,8 @@ function M.get_options(config, ngx)
     proxy_opts = {
       http_proxy  = config.http_proxy,
       https_proxy = config.https_proxy
-    }
+    },
+    use_pkce = config.use_pkce
   }
 end
 
@@ -96,7 +97,9 @@ end
 -- https://github.com/Kong/kong/blob/3.0.0/kong/plugins/oauth2/access.lua
 -- Copyright 2016-2022 Kong Inc. Licensed under the Apache License, Version 2.0
 -- https://github.com/Kong/kong/blob/3.0.0/LICENSE
+-- Updated for Kong 3.x compatibility
 local function set_consumer(consumer, credential)
+  -- Use Kong 3.x API for authentication
   kong.client.authenticate(consumer, credential)
 
   local set_header = kong.service.request.set_header
@@ -175,7 +178,7 @@ function M.injectHeaders(header_names, header_claims, sources)
   for i = 1, #header_names do
     local header, claim
     header = header_names[i]
-    claim = header_claims[i] 
+    claim = header_claims[i]
     kong.service.request.clear_header(header)
     for j = 1, #sources do
       local source, claim_value
@@ -216,10 +219,9 @@ function M.has_common_item(t1, t2)
   if type(t2) == "string" then
     t2 = { t2 }
   end
-  local i1, i2
-  for _, i1 in pairs(t1) do
-    for _, i2 in pairs(t2) do
-      if type(i1) == "string" and type(i2) == "string" and i1 == i2 then
+  for _, item1 in pairs(t1) do
+    for _, item2 in pairs(t2) do
+      if type(item1) == "string" and type(item2) == "string" and item1 == item2 then
         return true
       end
     end

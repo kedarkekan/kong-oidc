@@ -1,9 +1,9 @@
-# What is Kong OIDC plugin
+# Kong OIDC Plugin
 
-[![Join the chat at https://gitter.im/nokia/kong-oidc](https://badges.gitter.im/nokia/kong-oidc.svg)](https://gitter.im/nokia/kong-oidc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
-**Continuous Integration:** [![Build Status](https://travis-ci.org/nokia/kong-oidc.svg?branch=master)](https://travis-ci.org/nokia/kong-oidc)
-[![Coverage Status](https://coveralls.io/repos/github/nokia/kong-oidc/badge.svg?branch=master)](https://coveralls.io/github/nokia/kong-oidc?branch=master) <br/>
+[![CI](https://github.com/kedarkekan/kong-oidc/workflows/CI/badge.svg)](https://github.com/kedarkekan/kong-oidc/actions?query=workflow%3ACI)
+[![Release](https://github.com/kedarkekan/kong-oidc/workflows/Release/badge.svg)](https://github.com/kedarkekan/kong-oidc/actions?query=workflow%3ARelease)
+[![Kong Version](https://img.shields.io/badge/Kong-3.9.1-fe7d37?logo=kong&logoColor=white)](https://konghq.com/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **kong-oidc** is a plugin for [Kong](https://github.com/Mashape/kong) implementing the
 [OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html) Relying Party (RP) functionality.
@@ -27,6 +27,10 @@ the server itself.
 The introspection functionality adds capability for already authenticated users and/or applications that
 already possess access token to go through kong. The actual token verification is then done by Resource Server.
 
+## Compatibility
+
+This plugin is compatible with Kong 3.9.x and later versions. For Kong 2.x compatibility, please use version 1.4.x.
+
 ## How does it work
 
 The diagram below shows the message exchange between the involved parties.
@@ -39,13 +43,15 @@ The `X-Userinfo` header contains the payload from the Userinfo Endpoint
 X-Userinfo: {"preferred_username":"alice","id":"60f65308-3510-40ca-83f0-e9c0151cc680","sub":"60f65308-3510-40ca-83f0-e9c0151cc680"}
 ```
 
-The plugin also sets the `ngx.ctx.authenticated_credential` variable, which can be using in other Kong plugins:
+The plugin sets the authenticated credential using Kong's client API, which can be accessed by other Kong plugins:
 
 ```lua
-ngx.ctx.authenticated_credential = {
-    id = "60f65308-3510-40ca-83f0-e9c0151cc680",   -- sub field from Userinfo
-    username = "alice"                             -- preferred_username from Userinfo
-}
+-- Kong 3.x compatible way to access authenticated credentials
+local credential = kong.client.get_credential()
+if credential then
+    -- credential.id contains the 'sub' field from Userinfo
+    -- credential.username contains the 'preferred_username' from Userinfo
+end
 ```
 
 For successfully authenticated request, possible (anonymous) consumer identity set by higher priority plugin is cleared as part of setting the credentials.
@@ -54,11 +60,17 @@ The plugin will try to retrieve the user's groups from a field in the token (def
 
 ## Dependencies
 
-**kong-oidc** depends on the following package:
+**kong-oidc** depends on the following packages:
 
-- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/)
+- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/) ~> 1.7.6-3
+- [`lua-resty-session`](https://github.com/bungle/lua-resty-session) ~> 4.0.5
+- [`lua-cjson`](https://github.com/mpx/lua-cjson) - JSON encoding/decoding
+- [`lua-resty-jwt`](https://github.com/SkyLothar/lua-resty-jwt) - JWT token handling
+- [`lua-resty-string`](https://github.com/openresty/lua-resty-string) - String utilities
 
 ## Installation
+
+### Option 1: Using LuaRocks
 
 If you're using `luarocks` execute the following:
 
@@ -67,6 +79,84 @@ If you're using `luarocks` execute the following:
 [Kong >= 0.14] Since `KONG_CUSTOM_PLUGINS` has been removed, you also need to set the `KONG_PLUGINS` environment variable to include besides the bundled ones, oidc
 
      export KONG_PLUGINS=bundled,oidc
+
+### Option 2: Using Docker
+
+Pre-built Docker images are available on GitHub Container Registry with support for both **Linux AMD64** and **Linux ARM64** architectures:
+
+```bash
+# Pull the latest image (auto-detects your architecture)
+docker pull ghcr.io/kedarkekan/kong-oidc:latest
+
+# Or pull a specific version
+docker pull ghcr.io/kedarkekan/kong-oidc:v1.5.0
+
+# Explicitly pull for specific architecture (recommended for consistency)
+docker pull --platform linux/amd64 ghcr.io/kedarkekan/kong-oidc:latest
+docker pull --platform linux/arm64 ghcr.io/kedarkekan/kong-oidc:latest
+
+# Check your system architecture first
+uname -m  # x86_64 = AMD64, arm64 = ARM64
+
+# Run Kong with the OIDC plugin
+docker run -d \
+  --name kong-oidc \
+  --platform linux/amd64 \  # or linux/arm64 for Apple Silicon
+  -e "KONG_DATABASE=off" \
+  -e "KONG_PROXY_ACCESS_LOG=/dev/stdout" \
+  -e "KONG_ADMIN_ACCESS_LOG=/dev/stdout" \
+  -e "KONG_PROXY_ERROR_LOG=/dev/stderr" \
+  -e "KONG_ADMIN_ERROR_LOG=/dev/stderr" \
+  -e "KONG_ADMIN_LISTEN=0.0.0.0:8001" \
+  -e "KONG_ADMIN_GUI_URL=http://localhost:8002" \
+  -p 8000:8000 \
+  -p 8443:8443 \
+  -p 8001:8001 \
+  -p 8444:8444 \
+  ghcr.io/kedarkekan/kong-oidc:latest
+```
+
+**Supported Architectures:**
+- ✅ **Linux AMD64** (x86_64) - Intel/AMD processors
+- ✅ **Linux ARM64** (aarch64) - Apple Silicon, ARM servers
+
+### **Troubleshooting**
+
+#### **"exec format error"**
+If you encounter this error, it means you're trying to run an image built for a different architecture:
+
+```bash
+# Check your system architecture
+uname -m
+
+# Pull the correct architecture
+docker pull --platform linux/amd64 ghcr.io/kedarkekan/kong-oidc:latest    # For Intel/AMD
+docker pull --platform linux/arm64 ghcr.io/kedarkekan/kong-oidc:latest    # For Apple Silicon
+
+# Run with explicit platform
+docker run --rm --platform linux/amd64 ghcr.io/kedarkekan/kong-oidc:latest kong version
+```
+
+
+
+### Option 3: Building from Source
+
+To build your own Docker image:
+
+```bash
+# Clone the repository
+git clone https://github.com/kedarkekan/kong-oidc.git
+cd kong-oidc
+
+# Build for your local architecture
+docker build -f docker/Dockerfile -t kong-oidc:local .
+
+# Build multi-architecture image (requires docker buildx)
+docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t kong-oidc:multiarch .
+
+# Run the image
+docker run --rm kong-oidc:local kong version
+```
 
 ## Usage
 
@@ -141,7 +231,7 @@ Content-Type: application/json; charset=utf-8
 Transfer-Encoding: chunked
 Connection: keep-alive
 Access-Control-Allow-Origin: *
-Server: kong/0.11.0
+Server: kong/3.9.1
 
 {
     "created_at": 1508871239797,
@@ -157,7 +247,7 @@ Server: kong/0.11.0
     "id": "58cc119b-e5d0-4908-8929-7d6ed73cb7de",
     "enabled": true,
     "name": "oidc",
-    "api_id": "32625081-c712-4c46-b16a-5d6d9081f85f"
+    "api_id": "32625081-c712-4c46-b16a-5d6ed73cb8f0"
 }
 ```
 
@@ -230,27 +320,201 @@ To pass the access token to the upstream server as a normal Bearer token, config
 
 ## Development
 
-### Running Unit Tests
+### Code Quality and Linting
 
-To run unit tests, run the following command:
+This project uses `luacheck` for code quality analysis. The linting is configured to be informative but not blocking:
 
 ```shell
+# Run linting locally
+./bin/lint.sh
+
+# Or run directly
+luacheck kong/ test/ --no-max-line-length --no-fail-on-warnings
+```
+
+**Linting Philosophy:**
+- ✅ **Kong plugin files**: Must be clean (0 critical warnings)
+- ⚠️ **Test files**: Expected warnings are acceptable
+- 📊 **Current status**: ~80 warnings total (mostly expected test patterns)
+
+**Expected Warning Categories:**
+- `unused argument self` - Standard in Lua object methods
+- `unused argument opts` - Expected in test mocks
+- `unused variable length argument` - Expected in mock functions
+
+These warnings don't affect functionality and are standard patterns in Lua testing environments.
+
+### Running Unit Tests
+
+#### **Local Testing**
+To run tests locally, use the provided script:
+```bash
+./bin/test-local.sh
+```
+
+This script will:
+- ✅ Check for required dependencies (Lua, LuaRocks)
+- ✅ Install missing test dependencies automatically
+- ✅ Run all unit tests with coverage
+
+#### **Manual Testing**
+If you prefer to run tests manually:
+```bash
+# Install test dependencies
+luarocks install lua-cjson luaunit luacov lua-resty-jwt lua-resty-string lua-resty-session classic
+
+# Run tests
+lua -lluacov test/unit/test_utils.lua -o TAP --failure
+```
+
+**Note:** All `lua-resty-*` modules and Kong plugin modules require the OpenResty/Nginx environment to run properly. They may not load in standalone Lua but will work correctly within Kong. Only `lua-cjson` works in standalone Lua environments.
+
+#### **Docker Testing**
+To run tests in a Docker environment:
+```bash
 ./bin/run-unit-tests.sh
 ```
 
 This may take a while for the first run, as the docker image will need to be built, but subsequent runs will be quick.
 
+### Continuous Integration
+
+This project uses GitHub Actions for continuous integration:
+
+- **Tests**: Runs on Kong 3.9.1
+- **Linting**: Uses luacheck for code quality (non-blocking)
+- **Docker**: Builds and tests Docker images
+
+View the latest CI status: [![CI](https://github.com/kedarkekan/kong-oidc/workflows/CI/badge.svg)](https://github.com/kedarkekan/kong-oidc/actions?query=workflow%3ACI)
+
 ### Building the Integration Test Environment
 
-To build the integration environment (Kong with the oidc plugin enabled, and Keycloak as the OIDC Provider), you will first need to find your computer's IP, and assign that to the environment variable `IP`. Finally, you will run the `./bin/build-env.sh` command. Here's an example:
+To build the integration environment (Kong with the oidc plugin enabled, and Keycloak as the OIDC Provider), you will need to set up environment variables and run the build script.
 
+#### **Option 1: Using Environment Variables**
 ```shell
 export IP=192.168.0.1
+export KONG_BASE_TAG=:3.9.1
+export KONG_DB_TAG=:10.1
 ./bin/build-env.sh
 ```
 
-To tear the environment down:
+#### **Option 2: Using .env File (Recommended)**
+The project includes a pre-configured `.env` file with Kong 3.9.1 settings. You may need to update the `IP` variable to match your local network:
 
+1. **Update IP address** (if needed):
+   ```bash
+   # Edit .env file and set your local IP
+   sed -i 's/IP=.*/IP=192.168.0.1/' .env  # Replace with your IP
+   ```
+
+2. **Run the build script**:
+   ```shell
+   ./bin/build-env.sh
+   ```
+
+#### **Tear Down Environment**
 ```shell
 ./bin/teardown-env.sh
 ```
+
+## Release Process
+
+### Versioning Strategy
+
+This project follows [Semantic Versioning](https://semver.org/) (SemVer) with manual version control:
+
+- **Patch releases** (`1.5.0` → `1.5.1`): Bug fixes and minor improvements
+- **Minor releases** (`1.5.0` → `1.6.0`): New features, backward compatible
+- **Major releases** (`1.5.0` → `2.0.0`): Breaking changes
+- **Build releases** (`1.5.0-0` → `1.5.0-1`): Build-specific releases
+
+### Automated Release Workflow
+
+The release process is fully automated through GitHub Actions:
+
+1. **Manual Trigger**: Go to Actions → Release → Run workflow
+2. **Version Input**: Enter the exact version number (e.g., `1.5.1`, `1.6.0`, `2.0.0`)
+3. **Automatic Steps**:
+   - Validates version format
+   - Checks if version already exists
+   - Updates version in `kong-oidc.rockspec`
+   - Updates Git tag in rockspec
+   - Commits and pushes version changes
+   - Creates Git tag
+   - Generates changelog from conventional commits
+   - Creates GitHub Release with changelog
+   - Builds and pushes Docker images to GHCR
+
+### Conventional Commits
+
+For automatic changelog generation, use conventional commit messages:
+
+```bash
+# Bug fixes
+git commit -m "fix: resolve authentication issue"
+
+# New features
+git commit -m "feat: add support for custom claims"
+
+# Breaking changes
+git commit -m "feat!: change API endpoint structure"
+
+# Documentation
+git commit -m "docs: update installation guide"
+
+# Build/CI changes
+git commit -m "ci: update GitHub Actions workflow"
+```
+
+### Release Tags
+
+Docker images are tagged as:
+- `v1.5.0` - Full version tag (e.g., `v1.5.0`, `v1.6.0`)
+- `latest` - Latest stable release (main branch only)
+
+## Migration from Kong 2.x
+
+If you're migrating from Kong 2.x to Kong 3.9.x, please note the following changes:
+
+1. **Credential Access**: The plugin now uses `kong.client.get_credential()` instead of `ngx.ctx.authenticated_credential`
+2. **Authentication API**: Uses `kong.client.authenticate()` for setting credentials
+3. **Dependencies**: Updated to use `lua-resty-openidc ~> 1.7.6-3` and `lua-resty-session ~> 4.0.5`
+
+For Kong 2.x compatibility, please use version 1.4.x of this plugin.
+
+## 🚀 **CI/CD Pipeline**
+
+### **Workflows**
+
+#### **CI Workflow** (`.github/workflows/ci.yml`)
+- **Triggers:** Push to main, Pull requests, Manual trigger
+- **Jobs:** Unit tests, Linting, Docker builds
+- **Output:** Multi-architecture Docker images on GHCR
+
+#### **Release Workflow** (`.github/workflows/release.yml`)
+- **Triggers:** Manual trigger only
+- **Jobs:** Version bumping, Git tagging, GitHub Release creation, Docker image building and publishing
+- **Output:** Versioned Docker images on GHCR, GitHub Release with changelog
+
+
+
+### **Manual Triggers**
+
+#### **Manual CI Run:**
+1. Go to **Actions** tab
+2. Select **CI** workflow
+3. Click **Run workflow**
+
+#### **Manual Release:**
+1. Go to **Actions** tab
+2. Select **Release** workflow
+3. Click **Run workflow**
+4. Enter version number (e.g., `1.5.1`, `1.6.0`, `2.0.0`)
+5. Optionally add release notes
+
+
+
+
+
+

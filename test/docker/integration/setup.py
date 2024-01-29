@@ -32,8 +32,8 @@ Returns {"KONG_TAG": "", "KONG_DB_TAG": ":10.1" ...}
 """
 def get_env_vars():
     with open(env_file_path) as f:
-        lines = [l.rstrip().split("=", maxsplit=1) 
-                 for l in f 
+        lines = [l.rstrip().split("=", maxsplit=1)
+                 for l in f
                  # Skip blank lines and comments
                  if l.strip() != "" and not l.startswith("#")]
 
@@ -41,7 +41,8 @@ def get_env_vars():
 
 def get_config(env):
     keycloak_url   = "http://{}:{}".format(host, env["KEYCLOAK_PORT"])
-    discovery_path = "/auth/realms/master/.well-known/openid-configuration"
+    # Updated for newer Keycloak versions
+    discovery_path = "/realms/master/.well-known/openid-configuration"
 
     return Config(
         keycloak_endpoint = keycloak_url,

@@ -1,6 +1,6 @@
-package.path = package.path .. ";test/lib/?.lua;;" -- kong & co
+package.path = "test/lib/?.lua;" .. package.path -- kong & co (prioritize our mocks)
 
-local Object = require "kong.vendor.classic"
+local Object = require "classic"
 local BaseCase = Object:extend()
 
 

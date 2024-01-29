@@ -1,3 +1,5 @@
+package.path = "test/lib/?.lua;" .. package.path -- kong & co (prioritize our mocks)
+
 local filter = require("kong.plugins.oidc.filter")
 local lu = require("luaunit")
 
@@ -37,14 +39,14 @@ end
 
 function TestFilter:testProcessRequestWhenTheyAreNoFiltersNil()
   ngx.var.uri = "/pattern1"
-  config.filters= nil
-  lu.assertTrue(filter.shouldProcessRequest(config))
+  local testConfig = { filters = nil }
+  lu.assertTrue(filter.shouldProcessRequest(testConfig))
 end
 
 function TestFilter:testProcessRequestWhenTheyAreNoFiltersEmpty()
   ngx.var.uri = "/pattern1"
-  config.filters= {}
-  lu.assertTrue(filter.shouldProcessRequest(config))
+  local testConfig = { filters = {} }
+  lu.assertTrue(filter.shouldProcessRequest(testConfig))
 end
 
 

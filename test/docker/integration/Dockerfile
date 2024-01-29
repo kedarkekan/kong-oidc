@@ -1,5 +1,5 @@
-ARG KONG_BASE_TAG
-FROM kong${KONG_BASE_TAG}
+ARG KONG_BASE_TAG=3.9.1
+FROM kong:${KONG_BASE_TAG}
 USER root
 
 ENV LUA_PATH /usr/local/share/lua/5.1/?.lua;/usr/local/kong-oidc/?.lua;;
@@ -8,12 +8,16 @@ ENV LUA_CPATH /usr/local/lib/lua/5.1/?.so;;
 
 # Install unzip for luarocks, gcc for lua-cjson
 RUN apt update && apt install -y unzip gcc curl
+# Clear luarocks cache to avoid manifest issues
+RUN rm -rf /root/.cache/luarocks
+# Configure luarocks for Kong 3.x compatibility
+RUN luarocks config lua_version 5.1
 RUN luarocks install luacov
 RUN luarocks install luaunit
 RUN luarocks install lua-cjson
 RUN luarocks install luaossl OPENSSL_DIR=/usr/local/kong CRYPTO_DIR=/usr/local/kong
 
-# Change openidc version when version in rockspec changes
-RUN luarocks install lua-resty-openidc 1.7.5-1
+# Install lua-resty-openidc with specific version for Kong 3.9.1 compatibility
+RUN luarocks install lua-resty-openidc 1.7.6-3
 
 COPY . /usr/local/kong-oidc

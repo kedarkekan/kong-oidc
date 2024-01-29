@@ -10,6 +10,7 @@ function MockableCase:setUp()
     ERR = "error",
     HTTP_UNAUTHORIZED = 401,
     HTTP_FORBIDDEN = 403,
+    HTTP_NOT_ACCEPTABLE = 406,
     HTTP_INTERNAL_SERVER_ERROR = 500,
     ctx = {},
     header = {},
@@ -36,8 +37,12 @@ function MockableCase:setUp()
   self.mocked_kong = {
     client = {
       authenticate = function(consumer, credential)
+        -- Store in Kong 3.x compatible way
         ngx.ctx.authenticated_consumer = consumer
         ngx.ctx.authenticated_credential = credential
+      end,
+      get_credential = function()
+        return ngx.ctx.authenticated_credential
       end
     },
     service = {

@@ -1,3 +1,5 @@
+package.path = "test/lib/?.lua;" .. package.path -- kong & co (prioritize our mocks)
+
 local utils = require("kong.plugins.oidc.utils")
 local lu = require("luaunit")
 

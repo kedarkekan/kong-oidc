@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.5.1)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes (optional)'
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for conventional commits
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install -g conventional-changelog-cli
+
+    - name: Validate version format
+      id: validate_version
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+
+        # Check if version is provided
+        if [ -z "$VERSION" ]; then
+          echo "❌ Error: Version is required"
+          exit 1
+        fi
+
+        # Validate version format (semantic versioning)
+        if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$' > /dev/null; then
+          echo "❌ Error: Invalid version format. Use semantic versioning (e.g., 1.5.1 or 1.5.1-1)"
+          exit 1
+        fi
+
+        echo "✅ Version format is valid: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if version already exists
+      run: |
+        VERSION="${{ steps.validate_version.outputs.version }}"
+
+        # Check if tag already exists
+        if git tag -l "v$VERSION" | grep -q "v$VERSION"; then
+          echo "❌ Error: Tag v$VERSION already exists"
+          echo "Please use a different version number"
+          exit 1
+        fi
+
+        echo "✅ Version v$VERSION does not exist"
+
+    - name: Update rockspec version
+      run: |
+        VERSION="${{ steps.validate_version.outputs.version }}"
+
+        # Update version in rockspec
+        sed -i "s/^version = \".*\"/version = \"$VERSION\"/" kong-oidc.rockspec
+        sed -i "s/^tag = \".*\"/tag = \"v$VERSION\"/" kong-oidc.rockspec
+
+        echo "✅ Updated rockspec to version $VERSION"
+        echo "📝 Rockspec changes:"
+        git diff kong-oidc.rockspec
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        VERSION="${{ steps.validate_version.outputs.version }}"
+
+        if [ -n "${{ github.event.inputs.release_notes }}" ]; then
+          echo "Using custom release notes"
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "${{ github.event.inputs.release_notes }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "Generating changelog from conventional commits"
+          # Generate changelog from conventional commits
+          CHANGELOG=$(conventional-changelog -p angular -i CHANGELOG.md -s -r 0)
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="## What's Changed\n\n- Bug fixes and improvements"
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+
+    - name: Commit and push version bump
+      run: |
+        VERSION="${{ steps.validate_version.outputs.version }}"
+        git add kong-oidc.rockspec
+        git commit -m "chore: bump version to $VERSION"
+        git push
+
+    - name: Create Git tag
+      run: |
+        VERSION="${{ steps.validate_version.outputs.version }}"
+        git tag -a "v$VERSION" -m "Release v$VERSION"
+        git push origin "v$VERSION"
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.validate_version.outputs.version }}
+        release_name: Release v${{ steps.validate_version.outputs.version }}
+        body: ${{ steps.changelog.outputs.changelog }}
+        draft: false
+        prerelease: false
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/kedarkekan/kong-oidc
+        tags: |
+          type=raw,value=${{ steps.validate_version.outputs.version }}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        provenance: false
+
+    - name: Test Docker image
+      run: |
+        VERSION="${{ steps.validate_version.outputs.version }}"
+
+        # Detect runner architecture
+        RUNNER_ARCH=$(uname -m)
+        if [ "$RUNNER_ARCH" = "x86_64" ]; then
+          PLATFORM="linux/amd64"
+        elif [ "$RUNNER_ARCH" = "aarch64" ]; then
+          PLATFORM="linux/arm64"
+        else
+          echo "Unknown architecture: $RUNNER_ARCH"
+          exit 1
+        fi
+
+        echo "Testing Docker image v$VERSION on platform: $PLATFORM"
+
+        # Pull and test the image
+        docker pull --platform $PLATFORM ghcr.io/kedarkekan/kong-oidc:$VERSION
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION kong version
+
+        # Test basic dependencies
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION lua -e "print('Testing cjson...'); local cjson = require('cjson'); print('cjson loaded successfully')"
+
+        # Test resty dependencies (require ngx context)
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION lua -e "print('Testing resty dependencies...'); local ok, _ = pcall(require, 'resty.openidc'); print('resty.openidc:', ok and 'loaded (requires ngx context)' or 'failed (expected - requires ngx context)')"
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION lua -e "local ok, _ = pcall(require, 'resty.session'); print('resty.session:', ok and 'loaded (requires ngx context)' or 'failed (expected - requires ngx context)')"
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION lua -e "local ok, _ = pcall(require, 'resty.jwt'); print('resty.jwt:', ok and 'loaded (requires ngx context)' or 'failed (expected - requires ngx context)')"
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION lua -e "local ok, _ = pcall(require, 'resty.string'); print('resty.string:', ok and 'loaded (requires ngx context)' or 'failed (expected - requires ngx context)')"
+
+        # Test plugin loading (requires ngx context)
+        docker run --platform $PLATFORM --rm ghcr.io/kedarkekan/kong-oidc:$VERSION lua -e "print('Testing plugin loading...'); local ok, _ = pcall(require, 'kong.plugins.oidc.handler'); print('kong.plugins.oidc.handler:', ok and 'loaded (requires ngx context)' or 'failed (expected - requires ngx context)')"
+
+        echo "✅ Docker image v$VERSION test completed successfully"

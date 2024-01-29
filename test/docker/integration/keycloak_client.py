@@ -9,12 +9,12 @@ class KeycloakClient:
         self._password = password
 
     def discover(self, config_type = "openid-configuration"):
-        res = self._session.get("{}/auth/realms/{}/.well-known/{}".format(self._endpoint, self._realm, config_type))
+        res = self._session.get("{}/realms/{}/.well-known/{}".format(self._endpoint, self._realm, config_type))
         res.raise_for_status()
         return res.json()
 
     def create_client(self, name, secret):
-        url     = "{}/auth/admin/realms/master/clients".format(self._endpoint)
+        url     = "{}/admin/realms/master/clients".format(self._endpoint)
         payload = {
             "clientId": name,
             "secret": secret,
@@ -23,7 +23,7 @@ class KeycloakClient:
 
         headers = self.get_auth_header()
         res     = self._session.post(url, json=payload, headers=headers)
-        
+
         if res.status_code not in [201, 409]:
             raise Exception("Cannot Keycloak create client")
 
@@ -33,16 +33,16 @@ class KeycloakClient:
         }
 
     def get_token(self, client_id):
-        url = "{}/auth/realms/{}/protocol/openid-connect/token".format(self._endpoint, self._realm)
-        
+        url = "{}/realms/{}/protocol/openid-connect/token".format(self._endpoint, self._realm)
+
         payload = f'client_id={client_id}&grant_type=password' + \
                   f'&username={self._username}&password={self._password}'
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
-        
+
         res = self._session.post(url, data=payload, headers=headers)
         res.raise_for_status()
-        
+
         return res.json()["access_token"]
