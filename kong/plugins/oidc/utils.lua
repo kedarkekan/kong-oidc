@@ -97,7 +97,9 @@ end
 -- https://github.com/Kong/kong/blob/3.0.0/kong/plugins/oauth2/access.lua
 -- Copyright 2016-2022 Kong Inc. Licensed under the Apache License, Version 2.0
 -- https://github.com/Kong/kong/blob/3.0.0/LICENSE
+-- Updated for Kong 3.x compatibility
 local function set_consumer(consumer, credential)
+  -- Use Kong 3.x API for authentication
   kong.client.authenticate(consumer, credential)
 
   local set_header = kong.service.request.set_header

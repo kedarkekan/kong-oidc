@@ -1,9 +1,12 @@
 # What is Kong OIDC plugin
 
-[![Join the chat at https://gitter.im/nokia/kong-oidc](https://badges.gitter.im/nokia/kong-oidc.svg)](https://gitter.im/nokia/kong-oidc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-**Continuous Integration:** [![Build Status](https://travis-ci.org/nokia/kong-oidc.svg?branch=master)](https://travis-ci.org/nokia/kong-oidc)
-[![Coverage Status](https://coveralls.io/repos/github/nokia/kong-oidc/badge.svg?branch=master)](https://coveralls.io/github/nokia/kong-oidc?branch=master) <br/>
+
+**Continuous Integration:** [![CI](https://github.com/kedarkekan/kong-oidc/workflows/CI/badge.svg)](https://github.com/kedarkekan/kong-oidc/actions?query=workflow%3ACI)
+[![Coverage Status](https://coveralls.io/repos/github/kedarkekan/kong-oidc/badge.svg?branch=master)](https://coveralls.io/github/kedarkekan/kong-oidc?branch=master)
+[![Release](https://github.com/kedarkekan/kong-oidc/workflows/Release/badge.svg)](https://github.com/kedarkekan/kong-oidc/actions?query=workflow%3ARelease)
+[![Kong Version](docs/badges/kong-version.svg)](https://konghq.com/)
+[![License](docs/badges/license.svg)](LICENSE) <br/>
 
 **kong-oidc** is a plugin for [Kong](https://github.com/Mashape/kong) implementing the
 [OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html) Relying Party (RP) functionality.
@@ -27,6 +30,10 @@ the server itself.
 The introspection functionality adds capability for already authenticated users and/or applications that
 already possess access token to go through kong. The actual token verification is then done by Resource Server.
 
+## Compatibility
+
+This plugin is compatible with Kong 3.9.x and later versions. For Kong 2.x compatibility, please use version 1.4.x.
+
 ## How does it work
 
 The diagram below shows the message exchange between the involved parties.
@@ -39,13 +46,15 @@ The `X-Userinfo` header contains the payload from the Userinfo Endpoint
 X-Userinfo: {"preferred_username":"alice","id":"60f65308-3510-40ca-83f0-e9c0151cc680","sub":"60f65308-3510-40ca-83f0-e9c0151cc680"}
 ```
 
-The plugin also sets the `ngx.ctx.authenticated_credential` variable, which can be using in other Kong plugins:
+The plugin sets the authenticated credential using Kong's client API, which can be accessed by other Kong plugins:
 
 ```lua
-ngx.ctx.authenticated_credential = {
-    id = "60f65308-3510-40ca-83f0-e9c0151cc680",   -- sub field from Userinfo
-    username = "alice"                             -- preferred_username from Userinfo
-}
+-- Kong 3.x compatible way to access authenticated credentials
+local credential = kong.client.get_credential()
+if credential then
+    -- credential.id contains the 'sub' field from Userinfo
+    -- credential.username contains the 'preferred_username' from Userinfo
+end
 ```
 
 For successfully authenticated request, possible (anonymous) consumer identity set by higher priority plugin is cleared as part of setting the credentials.
@@ -54,9 +63,10 @@ The plugin will try to retrieve the user's groups from a field in the token (def
 
 ## Dependencies
 
-**kong-oidc** depends on the following package:
+**kong-oidc** depends on the following packages:
 
-- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/)
+- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/) ~> 1.7.6-3
+- [`lua-resty-session`](https://github.com/bungle/lua-resty-session) ~> 4.0.5
 
 ## Installation
 
@@ -141,7 +151,7 @@ Content-Type: application/json; charset=utf-8
 Transfer-Encoding: chunked
 Connection: keep-alive
 Access-Control-Allow-Origin: *
-Server: kong/0.11.0
+Server: kong/3.9.1
 
 {
     "created_at": 1508871239797,
@@ -157,7 +167,7 @@ Server: kong/0.11.0
     "id": "58cc119b-e5d0-4908-8929-7d6ed73cb7de",
     "enabled": true,
     "name": "oidc",
-    "api_id": "32625081-c712-4c46-b16a-5d6d9081f85f"
+    "api_id": "32625081-c712-4c46-b16a-5d6ed73cb8f0"
 }
 ```
 
@@ -240,6 +250,17 @@ To run unit tests, run the following command:
 
 This may take a while for the first run, as the docker image will need to be built, but subsequent runs will be quick.
 
+### Continuous Integration
+
+This project uses GitHub Actions for continuous integration:
+
+- **Tests**: Runs on Kong 3.9.1 and 3.10.0
+- **Linting**: Uses luacheck for code quality
+- **Docker**: Builds and tests Docker images
+- **Coverage**: Reports to Coveralls
+
+View the latest CI status: [![CI](https://github.com/kedarkekan/kong-oidc/workflows/CI/badge.svg)](https://github.com/kedarkekan/kong-oidc/actions?query=workflow%3ACI)
+
 ### Building the Integration Test Environment
 
 To build the integration environment (Kong with the oidc plugin enabled, and Keycloak as the OIDC Provider), you will first need to find your computer's IP, and assign that to the environment variable `IP`. Finally, you will run the `./bin/build-env.sh` command. Here's an example:
@@ -254,3 +275,13 @@ To tear the environment down:
 ```shell
 ./bin/teardown-env.sh
 ```
+
+## Migration from Kong 2.x
+
+If you're migrating from Kong 2.x to Kong 3.9.x, please note the following changes:
+
+1. **Credential Access**: The plugin now uses `kong.client.get_credential()` instead of `ngx.ctx.authenticated_credential`
+2. **Authentication API**: Uses `kong.client.authenticate()` for setting credentials
+3. **Dependencies**: Updated to use `lua-resty-openidc ~> 1.7.6-3` and `lua-resty-session ~> 4.0.5`
+
+For Kong 2.x compatibility, please use version 1.4.x of this plugin.

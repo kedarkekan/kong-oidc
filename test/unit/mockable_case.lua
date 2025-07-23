@@ -36,8 +36,12 @@ function MockableCase:setUp()
   self.mocked_kong = {
     client = {
       authenticate = function(consumer, credential)
+        -- Store in Kong 3.x compatible way
         ngx.ctx.authenticated_consumer = consumer
         ngx.ctx.authenticated_credential = credential
+      end,
+      get_credential = function()
+        return ngx.ctx.authenticated_credential
       end
     },
     service = {

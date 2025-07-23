@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Lua
+      run: |
+        pip install hererocks
+        hererocks lua_install -r^ --lua=5.1
+        export PATH=$PATH:$PWD/lua_install/bin
+        echo "$PWD/lua_install/bin" >> $GITHUB_PATH
+
+    - name: Configure luarocks
+      run: |
+        rm -rf ~/.cache/luarocks
+        luarocks config lua_version 5.1
+
+    - name: Install Kong
+      run: |
+        luarocks install kong 3.9.1-0
+
+    - name: Install dependencies
+      run: |
+        luarocks install lua-resty-openidc 1.7.6-3
+        luarocks install lua-cjson
+        luarocks install luaunit
+        luarocks install luacov
+
+    - name: Run tests
+      run: |
+        . ci/run.sh
+
+    - name: Build rockspec
+      run: |
+        luarocks build kong-oidc.rockspec
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## Kong OIDC Plugin Release ${{ github.ref_name }}
+
+          ### Changes
+          - Kong 3.9.1 compatibility
+          - Updated dependencies
+          - Modern CI/CD with GitHub Actions
+          - Improved error handling
+
+          ### Installation
+          ```bash
+          luarocks install kong-oidc ${{ github.ref_name }}
+          ```
+
+          ### Docker
+          ```bash
+          docker pull kong/kong:3.9.1
+          # Use Dockerfile.kong-3.9.1 for custom builds
+          ```
+        draft: false
+        prerelease: false
+
+    - name: Upload rockspec
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./kong-oidc-${{ github.ref_name }}.rockspec
+        asset_name: kong-oidc-${{ github.ref_name }}.rockspec
+        asset_content_type: application/octet-stream
