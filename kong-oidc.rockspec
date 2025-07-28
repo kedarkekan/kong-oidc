@@ -1,5 +1,5 @@
 package = "kong-oidc"
-version = "1.5.0-0"
+version = "1.5.0"
 source = {
     url = "git://github.com/kedarkekan/kong-oidc",
     tag = "v1.5.0-0",
